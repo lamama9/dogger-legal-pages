@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מחיקת חשבון - Dogger | Delete Account</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.0/dist/umd/supabase.js" integrity="sha384-3lSoufGjgosjqp3JDr/NReX3PjMd3SlC8wJ23CWFjB6DSFNf71I0DhcRTUm9MwgO" crossorigin="anonymous"></script>
+</head>
+<body>
+<main class="page">
+  <div class="card lang-he">
+    <h1>מחיקת חשבון - Dogger</h1>
+    <p class="lang-en">Delete your Dogger account</p>
+  </div>
+
+  <div id="login-card" class="card">
+    <div class="lang-he">
+      <p>התחברו עם פרטי החשבון שברצונכם למחוק. נרשמתם עם Google ואין לכם סיסמה? מחקו את החשבון מתוך האפליקציה (הגדרות ← מחיקת חשבון) במקום.</p>
+    </div>
+    <div class="lang-en">
+      <p>Log in with the account you want to delete. Signed up with Google and have no password? Delete your account from within the app instead (Settings → Delete Account).</p>
+    </div>
+    <p id="login-error" class="error-text hidden"></p>
+    <form id="login-form">
+      <label for="email">אימייל / Email</label>
+      <input type="email" id="email" required autocomplete="email">
+      <label for="password">סיסמה / Password</label>
+      <input type="password" id="password" required autocomplete="current-password">
+      <div class="actions">
+        <button type="submit" class="btn-primary" id="login-button">התחברות / Log in</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="confirm-card" class="card hidden">
+    <div class="warning-box">
+      <p class="lang-he">החשבון יימחק לצמיתות - לא תוכלו להתחבר שוב, והשם/פרטים האישיים שלכם יוסרו. דירוגים שניתנו/התקבלו יישמרו במידע אנונימי.</p>
+      <p class="lang-en">Your account will be permanently deleted - you will not be able to log in again, and your name/personal details will be removed. Ratings you gave or received are kept, anonymized.</p>
+    </div>
+    <p id="confirm-error" class="error-text hidden"></p>
+    <div class="actions">
+      <button class="btn-secondary" id="cancel-button">ביטול / Cancel</button>
+      <button class="btn-danger" id="confirm-button">מחק לצמיתות / Delete permanently</button>
+    </div>
+  </div>
+
+  <div id="success-card" class="card hidden">
+    <p class="lang-he">החשבון נמחק בהצלחה.</p>
+    <p class="lang-en">Your account has been deleted.</p>
+  </div>
+
+  <footer><a href="privacy.html">מדיניות פרטיות / Privacy Policy</a></footer>
+</main>
+
+<script>
+  const SUPABASE_URL = "https://qrnvicxkunmlpznxhkut.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFybnZpY3hrdW5tbHB6bnhoa3V0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0NjczMTAsImV4cCI6MjEwMTA0MzMxMH0.S6x2pzi51Gi3xp3zy2UgSxXATLR_v9GHuhxiXMgFMLE";
+  const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const loginCard = document.getElementById("login-card");
+  const confirmCard = document.getElementById("confirm-card");
+  const successCard = document.getElementById("success-card");
+  const loginForm = document.getElementById("login-form");
+  const loginButton = document.getElementById("login-button");
+  const loginError = document.getElementById("login-error");
+  const confirmError = document.getElementById("confirm-error");
+  const confirmButton = document.getElementById("confirm-button");
+  const cancelButton = document.getElementById("cancel-button");
+
+  function showError(el, message) {
+    el.textContent = message;
+    el.classList.remove("hidden");
+  }
+
+  function hideError(el) {
+    el.classList.add("hidden");
+  }
+
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    hideError(loginError);
+    loginButton.disabled = true;
+    loginButton.textContent = "מתחבר... / Logging in...";
+
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    const { error } = await client.auth.signInWithPassword({ email, password });
+
+    loginButton.disabled = false;
+    loginButton.textContent = "התחברות / Log in";
+
+    if (error) {
+      showError(loginError, "אימייל או סיסמה שגויים / Incorrect email or password");
+      return;
+    }
+
+    loginCard.classList.add("hidden");
+    confirmCard.classList.remove("hidden");
+  });
+
+  cancelButton.addEventListener("click", async () => {
+    await client.auth.signOut();
+    confirmCard.classList.add("hidden");
+    hideError(confirmError);
+    loginCard.classList.remove("hidden");
+  });
+
+  confirmButton.addEventListener("click", async () => {
+    hideError(confirmError);
+    confirmButton.disabled = true;
+    confirmButton.textContent = "מוחק... / Deleting...";
+
+    try {
+      // Resolve the caller's own users.id - needed to find their sitter-photos folder.
+      // Filtered explicitly by auth_user_id (matches SupabaseUserRepository.kt's pattern) -
+      // users_select_all's RLS predicate is `is_hidden = false or auth_user_id = auth.uid()`,
+      // which is NOT scoped to just the caller's row (it also exposes every other visible
+      // user), so an unfiltered .single() 406s as soon as more than one such row exists.
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError || !authData?.user) throw authError ?? new Error("No authenticated user");
+
+      const { data: ownUser, error: ownUserError } = await client
+        .from("users")
+        .select("id")
+        .eq("auth_user_id", authData.user.id)
+        .single();
+      if (ownUserError) throw ownUserError;
+      const ownUserId = ownUser.id;
+
+      // Best-effort photo cleanup - must happen before the RPC call below, while
+      // auth_user_id still resolves (storage RLS from migration 0010 depends on it).
+      // A parent account has no files under its id, so list() simply returns [].
+      try {
+        const { data: files, error: listError } = await client.storage.from("sitter-photos").list(ownUserId);
+        if (listError) throw listError;
+        if (files && files.length > 0) {
+          const paths = files.map((f) => `${ownUserId}/${f.name}`);
+          const { error: removeError } = await client.storage.from("sitter-photos").remove(paths);
+          if (removeError) throw removeError;
+        }
+      } catch (photoError) {
+        // Not rethrown - a storage hiccup must never block deletion - but logged, since a
+        // silently-failed delete here means a deleted user's photo stays publicly visible
+        // (users.photo_url is cleared by the RPC below, but the file itself would remain in
+        // the sitter-photos bucket with no other trace of the failure).
+        console.warn("Photo cleanup failed (deletion will continue):", photoError);
+      }
+
+      const { error: rpcError } = await client.rpc("delete_own_account");
+      if (rpcError) throw rpcError;
+
+      await client.auth.signOut();
+      confirmCard.classList.add("hidden");
+      successCard.classList.remove("hidden");
+    } catch (err) {
+      console.error("Account deletion failed:", err);
+      confirmButton.disabled = false;
+      confirmButton.textContent = "מחק לצמיתות / Delete permanently";
+      showError(confirmError, "מחיקת החשבון נכשלה, נסו שוב / Account deletion failed, please try again");
+    }
+  });
+</script>
+</body>
+</html>
