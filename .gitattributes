@@ -1,0 +1,4 @@
+# This repo holds Expo's generated web build output (app/) alongside hand-written legal pages.
+# The build's JS/CSS/HTML is committed as-is on every deploy; letting git normalize line endings
+# on it serves no purpose and only produces LF/CRLF warnings and unnecessary diff churn.
+* -text
